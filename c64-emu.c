@@ -137,8 +137,18 @@ static int colors[16] = {
     145,    // light grey
 };
 
+uint8_t *sdlfb;
+int c64width, c64height;
+
+void crt_set_pixel(int x, int y, uint32_t color) {
+    uint8_t *dst = sdlfb + (x*3+y*c64width*3);
+    dst[0] = color & 0xff;
+    dst[1] = (color>>8) & 0xff;
+    dst[2] = (color>>16) & 0xff;
+}
+
 int main(int argc, char* argv[]) {
-    printf("%d\n",(int)sizeof(c64)); exit(1);
+    //printf("%d\n",(int)sizeof(c64)); exit(1);
 
     /* C64 emulator init. */
     (void)argc; (void)argv;
@@ -149,6 +159,7 @@ int main(int argc, char* argv[]) {
     c64_desc.roms.basic.size = sizeof(dump_c64_basic_bin);
     c64_desc.roms.kernal.ptr = dump_c64_kernalv3_bin;
     c64_desc.roms.kernal.size = sizeof(dump_c64_kernalv3_bin);
+    c64_desc.crt_set_pixel = crt_set_pixel;
     c64_init(&c64, &c64_desc);
 
     // install a Ctrl-C signal handler
@@ -156,12 +167,10 @@ int main(int argc, char* argv[]) {
 
     /* SDL Init. */
     chips_display_info_t di = c64_display_info(&c64);
-    uint8_t *c64fb = di.frame.buffer.ptr;
     int fbsize = di.frame.buffer.size;
     uint32_t *palette = di.palette.ptr;
     printf("FB total size %dx%d\n",di.frame.dim.width, di.frame.dim.height);
     printf("FB screen %dx%d at %dx%d\n",di.screen.width, di.screen.height, di.screen.x, di.screen.y);
-    printf("FB at %p, %d bytes\n",(void*)c64fb,fbsize);
 
     int width = di.frame.dim.width;
     int height = di.frame.dim.height;
@@ -169,7 +178,9 @@ int main(int argc, char* argv[]) {
     SDL_Texture *texture;
     SDL_Renderer *renderer;
     texture = sdlInit(width,height,0,&renderer);
-    uint8_t *sdlfb = malloc(width*height*3);
+    c64width = width;
+    c64height = height;
+    sdlfb = malloc(width*height*3);
 
     // run the emulation/input/render loop
     while (!quit_requested) {
@@ -183,17 +194,6 @@ int main(int argc, char* argv[]) {
         */
 
         // Update SDL screen
-        uint8_t *src = c64fb;
-        uint8_t *dst = sdlfb;
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                uint32_t color = palette[*src++];
-                dst[0] = color & 0xff;
-                dst[1] = (color>>8) & 0xff;
-                dst[2] = (color>>16) & 0xff;
-                dst += 3;
-            }
-        }
         sdlShowRgb(texture, renderer, sdlfb, width, height);
         sdlProcessEvents();
 

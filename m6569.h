@@ -148,6 +148,27 @@ extern "C" {
 // merge 8-bit data bus value into 64-bit pins
 #define M6569_SET_DATA(p,d) {p=(((p)&~0xFF0000ULL)|(((d)<<16)&0xFF0000ULL));}
 
+/* https://www.pepto.de/projects/colorvic/ */
+#define _M6569_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
+static const uint32_t _m6569_colors[16] = {
+    _M6569_RGBA8(0x00,0x00,0x00),
+    _M6569_RGBA8(0xff,0xff,0xff),
+    _M6569_RGBA8(0x81,0x33,0x38),
+    _M6569_RGBA8(0x75,0xce,0xc8),
+    _M6569_RGBA8(0x8e,0x3c,0x97),
+    _M6569_RGBA8(0x56,0xac,0x4d),
+    _M6569_RGBA8(0x2e,0x2c,0x9b),
+    _M6569_RGBA8(0xed,0xf1,0x71),
+    _M6569_RGBA8(0x8e,0x50,0x29),
+    _M6569_RGBA8(0x55,0x38,0x00),
+    _M6569_RGBA8(0xc4,0x6c,0x71),
+    _M6569_RGBA8(0x4a,0x4a,0x4a),
+    _M6569_RGBA8(0x7b,0x7b,0x7b),
+    _M6569_RGBA8(0xa9,0xff,0x9f),
+    _M6569_RGBA8(0x70,0x6d,0xeb),
+    _M6569_RGBA8(0xb2,0xb2,0xb2),
+};
+
 // memory fetch callback, used to feed pixel- and color-data into the m6569
 typedef uint16_t (*m6569_fetch_t)(uint16_t addr, void* user_data);
 
@@ -161,6 +182,7 @@ typedef struct {
     m6569_fetch_t fetch_cb;
     // optional user-data for fetch callback
     void* user_data;
+    void (*crt_set_pixel)(int x, int y, uint32_t c);
 } m6569_desc_t;
 
 // register bank
@@ -306,6 +328,7 @@ typedef struct {
     m6569_sprite_unit_t sunit;
     m6569_video_matrix_t vm;
     uint64_t pins;
+    void (*crt_set_pixel)(int x, int y, uint32_t c);
 } m6569_t;
 
 // initialize a new m6569_t instance
@@ -387,11 +410,11 @@ static void _m6569_init_crt(m6569_crt_t* crt, const m6569_desc_t* desc) {
 
 void m6569_init(m6569_t* vic, const m6569_desc_t* desc) {
     CHIPS_ASSERT(vic && desc);
-    CHIPS_ASSERT(desc->framebuffer.ptr && (desc->framebuffer.size >= M6569_FRAMEBUFFER_SIZE_BYTES));
     memset(vic, 0, sizeof(*vic));
     _m6569_init_crt(&vic->crt, desc);
     vic->mem.fetch_cb = desc->fetch_cb;
     vic->mem.user_data = desc->user_data;
+    vic->crt_set_pixel = desc->crt_set_pixel;
 }
 
 /*--- reset ------------------------------------------------------------------*/
@@ -1071,7 +1094,7 @@ static inline uint8_t _m6569_color_multiplex(uint16_t bmc, uint16_t sc, uint8_t 
 }
 
 // decode the next 8 pixels
-static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* dst, uint8_t hpos) {
+static inline void _m6569_decode_pixels(m6569_t* vic, int x, int y, uint8_t g_data, uint8_t hpos) {
 
     m6569_sprite_unit_t* su = &vic->sunit;
     for (size_t i = 0; i < 8; i++) {
@@ -1124,10 +1147,11 @@ static inline void _m6569_decode_pixels(m6569_t* vic, uint8_t g_data, uint8_t* d
             case 4: bmc = _m6569_gunit_decode_mode4(vic); break;
         }
         _m6569_test_mob_data_col(vic, bmc, sc);
-        dst[i] = brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp);
+        vic->crt_set_pixel(x+i, y, _m6569_colors[brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp)]);
     }
 }
 
+#if 0
 /* decode the next 8 pixels as debug visualization */
 static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin, uint8_t* dst, uint8_t hpos) {
     _m6569_decode_pixels(vic, g_data, dst, hpos);
@@ -1170,6 +1194,7 @@ static void _m6569_decode_pixels_debug(m6569_t* vic, uint8_t g_data, bool ba_pin
         prev_dst[i] ^= 0xF0;
     }
 }
+#endif
 
 /*
     (see 3.7.2 in http://www.zimmers.net/cbmpics/cbm/c64/vic-ii.txt)
@@ -1620,19 +1645,22 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     }
 
     //--- decode pixels into framebuffer
+    #if 0
     if (vic->debug_vis) {
         const size_t x = vic->rs.h_count;
         const size_t y = vic->rs.v_count;
         uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
         _m6569_decode_pixels_debug(vic, g_data, 0 != (pins & M6569_BA), dst, vic->rs.h_count);
     }
-    else if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
+    else
+    #endif
+    if ((vic->crt.x >= vic->crt.vis_x0) && (vic->crt.x < vic->crt.vis_x1) &&
              (vic->crt.y >= vic->crt.vis_y0) && (vic->crt.y < vic->crt.vis_y1))
     {
         const size_t x = vic->crt.x - vic->crt.vis_x0;
         const size_t y = vic->crt.y - vic->crt.vis_y0;
-        uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
-        _m6569_decode_pixels(vic, g_data, dst, vic->rs.h_count);
+        // uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
+        _m6569_decode_pixels(vic, x*8, y, g_data, vic->rs.h_count);
     }
     vic->vm.vmli = vic->vm.next_vmli;
     return pins;
@@ -1687,27 +1715,6 @@ static const uint32_t _m6569_colors[16] = {
     _M6569_RGBA8(0x95,0x95,0x95)
 };
 */
-#define _M6569_RGBA8(r,g,b) (0xFF000000|(b<<16)|(g<<8)|(r))
-
-/* https://www.pepto.de/projects/colorvic/ */
-static const uint32_t _m6569_colors[16] = {
-    _M6569_RGBA8(0x00,0x00,0x00),
-    _M6569_RGBA8(0xff,0xff,0xff),
-    _M6569_RGBA8(0x81,0x33,0x38),
-    _M6569_RGBA8(0x75,0xce,0xc8),
-    _M6569_RGBA8(0x8e,0x3c,0x97),
-    _M6569_RGBA8(0x56,0xac,0x4d),
-    _M6569_RGBA8(0x2e,0x2c,0x9b),
-    _M6569_RGBA8(0xed,0xf1,0x71),
-    _M6569_RGBA8(0x8e,0x50,0x29),
-    _M6569_RGBA8(0x55,0x38,0x00),
-    _M6569_RGBA8(0xc4,0x6c,0x71),
-    _M6569_RGBA8(0x4a,0x4a,0x4a),
-    _M6569_RGBA8(0x7b,0x7b,0x7b),
-    _M6569_RGBA8(0xa9,0xff,0x9f),
-    _M6569_RGBA8(0x70,0x6d,0xeb),
-    _M6569_RGBA8(0xb2,0xb2,0xb2),
-};
 
 chips_range_t m6569_palette(void) {
     return (chips_range_t){

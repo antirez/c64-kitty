@@ -337,6 +337,7 @@ typedef struct {
             chips_range_t e000_ffff;
         } c1541;
     } roms;
+    void (*crt_set_pixel)(int x, int y, uint32_t c);
 } c64_desc_t;
 
 // C64 emulator state
@@ -377,8 +378,6 @@ typedef struct {
     uint8_t rom_char[0x1000];       // 4 KB character ROM image
     uint8_t rom_basic[0x2000];      // 8 KB BASIC ROM image
     uint8_t rom_kernal[0x2000];     // 8 KB KERNAL V3 ROM image
-    //alignas(64) uint8_t fb[M6569_FRAMEBUFFER_SIZE_BYTES];
-    alignas(64) uint8_t fb[1];
 
     // c1530_t c1530;      // optional datassette
     // c1541_t c1541;      // optional floppy drive
@@ -491,10 +490,6 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
     m6526_init(&sys->cia_2);
     m6569_init(&sys->vic, &(m6569_desc_t){
         .fetch_cb = _c64_vic_fetch,
-        .framebuffer = {
-            .ptr = sys->fb,
-            .size = sizeof(sys->fb),
-        },
         .screen = {
             .x = _C64_SCREEN_X,
             .y = _C64_SCREEN_Y,
@@ -502,6 +497,7 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
             .height = _C64_SCREEN_HEIGHT,
         },
         .user_data = sys,
+        .crt_set_pixel = desc->crt_set_pixel,
     });
     m6581_init(&sys->sid, &(m6581_desc_t){
         .tick_hz = C64_FREQUENCY,
@@ -1062,7 +1058,7 @@ chips_display_info_t c64_display_info(c64_t* sys) {
             },
             .bytes_per_pixel = 1,
             .buffer = {
-                .ptr = sys ? sys->fb : 0,
+                .ptr = 0,
                 .size = M6569_FRAMEBUFFER_SIZE_BYTES,
             }
         },
@@ -1079,7 +1075,6 @@ chips_display_info_t c64_display_info(c64_t* sys) {
             .height = _C64_SCREEN_HEIGHT
         };
     };
-    CHIPS_ASSERT(((sys == 0) && (res.frame.buffer.ptr == 0)) || ((sys != 0) && (res.frame.buffer.ptr != 0)));
     return res;
 }
 
