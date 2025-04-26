@@ -1659,7 +1659,6 @@ static uint64_t _m6569_tick(m6569_t* vic, uint64_t pins) {
     {
         const size_t x = vic->crt.x - vic->crt.vis_x0;
         const size_t y = vic->crt.y - vic->crt.vis_y0;
-        // uint8_t* dst = vic->crt.fb + (y * M6569_FRAMEBUFFER_WIDTH) + (x * M6569_PIXELS_PER_TICK);
         _m6569_decode_pixels(vic, x*8, y, g_data, vic->rs.h_count);
     }
     vic->vm.vmli = vic->vm.next_vmli;

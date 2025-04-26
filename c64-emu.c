@@ -167,13 +167,12 @@ int main(int argc, char* argv[]) {
 
     /* SDL Init. */
     chips_display_info_t di = c64_display_info(&c64);
-    int fbsize = di.frame.buffer.size;
     uint32_t *palette = di.palette.ptr;
     printf("FB total size %dx%d\n",di.frame.dim.width, di.frame.dim.height);
     printf("FB screen %dx%d at %dx%d\n",di.screen.width, di.screen.height, di.screen.x, di.screen.y);
 
-    int width = di.frame.dim.width;
-    int height = di.frame.dim.height;
+    int width = di.screen.width;
+    int height = di.screen.height;
 
     SDL_Texture *texture;
     SDL_Renderer *renderer;
