@@ -13,6 +13,7 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <assert.h>
 
 #define CHIPS_IMPL
 #include "chips_common.h"
@@ -167,9 +168,61 @@ uint64_t time_us(void) {
     return usec;
 }
 
-int main(int argc, char* argv[]) {
-    (void)argc; (void)argv;
+/* Load a PRG file in the C64 RAM. */
+int load_prg_file(c64_t* sys, const char *filename) {
+    uint8_t *buffer = NULL;
+    int file_size = 0;
+    int success = 0;
 
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+	perror("Error opening file");
+	fprintf(stderr, "Failed to open PRG file: %s\n", filename);
+	goto cleanup;
+    }
+
+    // Check file length in a portable way.
+    if (fseek(file, 0, SEEK_END) != 0) {
+        perror("Error seeking to end of file");
+        fprintf(stderr, "Failed to determine size of PRG file: %s\n", filename);
+        goto cleanup;
+    }
+    file_size = ftell(file);
+
+    // Load file content.
+    fseek(file, 0, SEEK_SET);
+    buffer = (uint8_t*)malloc(file_size);
+    if (!buffer) {
+        fprintf(stderr, "Error: Failed to allocate memory (%d bytes) for PRG file: %s\n", file_size, filename);
+        goto cleanup;
+    }
+
+    size_t bytes_read = fread(buffer, 1, file_size, file);
+    assert (bytes_read == file_size);
+
+    // Prepare data structure for c64_quickload() function and load.
+    chips_range_t prg_data;
+    prg_data.ptr = buffer;
+    prg_data.size = file_size;
+
+    if (c64_quickload(sys, prg_data)) {
+        printf("Successfully loaded PRG file via c64_quickload: %s (%d bytes)\n\r", filename, file_size);
+        success = 1;
+        int start_addr = buffer[1]<<8 | buffer[0];
+        printf("Run the program with SYS %d\r\n", start_addr);
+        // c64_basic_run(sys);
+    } else {
+        fprintf(stderr, "Error: c64_quickload function failed for file: %s\n\r", filename);
+        success = 0;
+    }
+
+cleanup:
+    if (file) fclose(file);
+    if (buffer) free(buffer);
+    return success;
+}
+
+int main(int argc, char* argv[]) {
     /* C64 emulator init. */
     c64_desc_t c64_desc = {0};
     c64_desc.roms.chars.ptr = dump_c64_char_bin;
@@ -197,6 +250,10 @@ int main(int argc, char* argv[]) {
 
     printf("C64 Emulator started. Press 'q' or 'ESC' to quit.\n");
 
+    /* Load the C64 provided PRG file if any. */
+    if (argc >= 2)
+        load_prg_file(&c64,argv[1]);
+
     // Enable raw mode for keyboard input
     enable_raw_mode();
 
@@ -217,6 +274,11 @@ int main(int argc, char* argv[]) {
         // pause until next frame
         if (elapsed_usec < FRAME_USEC) {
             usleep(FRAME_USEC - elapsed_usec);
+        }
+
+        /* Load the C64 provided PRG file if any. */
+        if (frame == 120 && argc >= 2) {
+            load_prg_file(&c64,argv[1]);
         }
     }
 
