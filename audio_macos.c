@@ -52,7 +52,10 @@ static void BufferCallback(void *inUserData, AudioQueueRef inAQ, AudioQueueBuffe
  * samples to the core audio buffers. */
 void audio_from_emulator(const float *samples, int num_samples, void *user_data){
     AudioState *state = user_data;
-    if (state->c64_buffer_len >= MAX_C64_BUFFER_LEN) return;
+    if (state->c64_buffer_len >= MAX_C64_BUFFER_LEN) {
+        printf("!"); fflush(stdout);
+        return;
+    }
     state->c64_buffer = realloc(state->c64_buffer, sizeof(short)*(state->c64_buffer_len + num_samples));
     for (int j = 0; j < num_samples; j++) {
         state->c64_buffer[state->c64_buffer_len] = (short) (samples[j]*30000);
@@ -84,7 +87,7 @@ void *audio_init(void) {
         return NULL;
     }
 
-    state->bufferSize = 44100 * sizeof(short);
+    state->bufferSize = (44100/10) * sizeof(short);
 
     // Allocate and prime audio buffers
     for (int i = 0; i < BUFFERS_COUNT; i++) {

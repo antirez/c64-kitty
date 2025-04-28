@@ -276,25 +276,36 @@ int main(int argc, char* argv[]) {
 
     // run the emulation/input/render loop
     int frame = 0;
+    uint64_t total_us_emulated = 0;
+    uint64_t total_us_start = time_us();
     while (!quit_requested) {
         // tick the emulator for 1 frame
+        uint64_t start_usec = time_us();
         c64_exec(&c64, FRAME_USEC);
+        total_us_emulated += FRAME_USEC;
 
         // Handle keyboard input
         process_keyboard();
 
         // Update display using Kitty protocol
-        uint64_t start_usec = time_us();
         kitty_update_display(frame++, width, height);
         uint64_t elapsed_usec = time_us() - start_usec;
 
         // pause until next frame
         if (elapsed_usec < FRAME_USEC) {
-            usleep(FRAME_USEC - elapsed_usec);
+            /* The emulated C64 may run at a slightly different speed than
+             * what we want, so we don't just wait for the theoretical
+             * frame time, but also adjust for the loop time spent in
+             * refreshing the screen, plus some global accounting to make
+             * sure we are in sync. */
+            uint64_t total_us_real = time_us() - total_us_start;
+            uint64_t delta_us = total_us_emulated - total_us_real;
+            int64_t to_sleep_us = FRAME_USEC - elapsed_usec + delta_us;
+            if (to_sleep_us > 0) usleep(to_sleep_us);
         }
 
         /* Load the C64 provided PRG file if any. */
-        if (frame == 120 && argc >= 2) {
+        if (frame == 90 && argc >= 2) {
             load_prg_file(&c64,argv[1]);
         }
     }
