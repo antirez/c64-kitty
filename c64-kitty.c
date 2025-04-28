@@ -62,7 +62,7 @@ size_t base64_encode(const unsigned char *data, size_t input_length, char *encod
     }
 
     // Add padding if needed
-    int mod_table[] = {0, 2, 1};
+    size_t mod_table[] = {0, 2, 1};
     for (i = 0; i < mod_table[input_length % 3]; i++)
         encoded_data[output_length - 1 - i] = '=';
 
@@ -171,7 +171,7 @@ uint64_t time_us(void) {
 /* Load a PRG file in the C64 RAM. */
 int load_prg_file(c64_t* sys, const char *filename) {
     uint8_t *buffer = NULL;
-    int file_size = 0;
+    size_t file_size = 0;
     int success = 0;
 
     FILE *file = fopen(filename, "rb");
@@ -193,8 +193,7 @@ int load_prg_file(c64_t* sys, const char *filename) {
     fseek(file, 0, SEEK_SET);
     buffer = (uint8_t*)malloc(file_size);
     if (!buffer) {
-        fprintf(stderr, "Error: Failed to allocate memory (%d bytes) for PRG file: %s\n", file_size, filename);
-        goto cleanup;
+        fprintf(stderr, "Error: Failed to allocate memory (%d bytes) for PRG file: %s\n", (int)file_size, filename); goto cleanup;
     }
 
     size_t bytes_read = fread(buffer, 1, file_size, file);
@@ -206,7 +205,7 @@ int load_prg_file(c64_t* sys, const char *filename) {
     prg_data.size = file_size;
 
     if (c64_quickload(sys, prg_data)) {
-        printf("Successfully loaded PRG file via c64_quickload: %s (%d bytes)\n\r", filename, file_size);
+        printf("Successfully loaded PRG file via c64_quickload: %s (%d bytes)\n\r", filename, (int)file_size);
         success = 1;
         int start_addr = buffer[1]<<8 | buffer[0];
         printf("Run the program with SYS %d\r\n", start_addr);
@@ -222,9 +221,28 @@ cleanup:
     return success;
 }
 
+#ifdef USE_AUDIO
+void *audio_init(void);
+void audio_from_emulator(const float *samples, int num_samples, void *user_data);
+#endif
+
 int main(int argc, char* argv[]) {
-    /* C64 emulator init. */
     c64_desc_t c64_desc = {0};
+
+    /* Initialize the audio subsystem. */
+#ifdef USE_AUDIO
+    void *audio_user_data = audio_init();
+    if (audio_user_data == NULL) {
+        fprintf(stderr,"Audio initialization failed\n");
+        exit(1);
+    }
+    chips_audio_callback_t audio_cb;
+    audio_cb.func = audio_from_emulator;
+    audio_cb.user_data = audio_user_data;
+    c64_desc.audio.callback = audio_cb;
+#endif
+
+    /* C64 emulator init. */
     c64_desc.roms.chars.ptr = dump_c64_char_bin;
     c64_desc.roms.chars.size = sizeof(dump_c64_char_bin);
     c64_desc.roms.basic.ptr = dump_c64_basic_bin;
@@ -236,7 +254,6 @@ int main(int argc, char* argv[]) {
 
     /* Get C64 display information */
     chips_display_info_t di = c64_display_info(&c64);
-    uint32_t *palette = di.palette.ptr;
     printf("FB total size %dx%d\n", di.frame.dim.width, di.frame.dim.height);
     printf("FB screen %dx%d at %dx%d\n", di.screen.width, di.screen.height, di.screen.x, di.screen.y);
 
