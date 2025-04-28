@@ -267,10 +267,6 @@ int main(int argc, char* argv[]) {
 
     printf("C64 Emulator started. Press 'q' or 'ESC' to quit.\n");
 
-    /* Load the C64 provided PRG file if any. */
-    if (argc >= 2)
-        load_prg_file(&c64,argv[1]);
-
     // Enable raw mode for keyboard input
     enable_raw_mode();
 
