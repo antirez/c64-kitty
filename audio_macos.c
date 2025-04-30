@@ -58,7 +58,7 @@ void audio_from_emulator(const float *samples, int num_samples, void *user_data)
     }
     state->c64_buffer = realloc(state->c64_buffer, sizeof(short)*(state->c64_buffer_len + num_samples));
     for (int j = 0; j < num_samples; j++) {
-        state->c64_buffer[state->c64_buffer_len] = (short) (samples[j]*30000);
+        state->c64_buffer[state->c64_buffer_len] = (short) (samples[j]*32367);
         state->c64_buffer_len++;
     }
 }
