@@ -13,6 +13,7 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <assert.h>
 
 #define CHIPS_IMPL
@@ -224,6 +225,7 @@ cleanup:
 #ifdef USE_AUDIO
 void *audio_init(void);
 void audio_from_emulator(const float *samples, int num_samples, void *user_data);
+void audio_cleanup(void *user_data);
 #endif
 
 int main(int argc, char* argv[]) {
@@ -297,6 +299,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
+#ifdef USE_AUDIO
+    audio_cleanup(audio_user_data);
+#endif
     // Cleanup
     free(fb);
     disable_raw_mode();
