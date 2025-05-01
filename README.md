@@ -17,7 +17,7 @@ On Linux and other Unix-alike system, where we don't have support for audio use:
 
 On Linux and other Unix-alike with ALSA audio use:
 
-    make  linux-audio
+    make  linux-alsa
 
 Otherwise, if you are in MacOS, use the following to use the low level C Audio API provided by the operating system:
 
@@ -35,4 +35,4 @@ The *unbelievable* [demo by Linus Åkesson](https://linusakesson.net/scene/a-min
 
 It is highly recommended to run the demo with audio on.
 
-Linux audio support by Pasquale 'sid' Fiorillo.
+Linux ALSA audio support by Pasquale 'sid' Fiorillo.
