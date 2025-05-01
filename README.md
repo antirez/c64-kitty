@@ -11,15 +11,19 @@ The code is licensed under the BSD license.
 
 ## Building
 
-On other Unix-alike system, where we don't have support for audio (yet) use:
+If you want to compile without audio support, use:
 
     make
 
-Otherwise, if you are in MacOS, use the following to use the low level C Audio API provided by the operating system:
+If you are in MacOS, use the following to use the low level C Audio API provided by the operating system. No additional libraries needed.
 
     make macos-audio
 
-If you are in Linux, you can use `pulseaudio`, via the `pulseaudio-dev` library
+On Linux and other systems with ALSA audio, use:
+
+    make  linux-alsa
+
+On Linux, to use `pulseaudio`, via the `pulseaudio-dev` library, use:
 
     make linux-pulseaudio
 
@@ -36,3 +40,10 @@ For instance, try this:
 The *unbelievable* [demo by Linus Åkesson](https://linusakesson.net/scene/a-mind-is-born/), released under the license Creative Commons BY-NC-SA, so I hope it is fine to include it here since this is open source code (Otherwise, please, Linus, tell me!).
 
 It is highly recommended to run the demo with audio on (on Mac and Linux).
+
+## Credits
+
+* C64 chips implementations by Andre Weissflog
+* Emulation glue code, Kitty support and MacOS audio by Salvatore Sanfilippo
+* Linux ALSA audio support by Pasquale 'sid' Fiorillo.
+* Linux Pulse audio support by Luca Di Maio.

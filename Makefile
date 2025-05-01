@@ -9,5 +9,8 @@ macos-audio: c64-kitty.c audio_macos.c
 linux-pulseaudio: c64-kitty.c audio_linux.c
 	gcc -D USE_AUDIO -O2 -Wall -W -lpulse -lpulse-simple c64-kitty.c audio_linux.c -o c64-kitty -g -ggdb
 
+linux-alsa: c64-kitty.c audio_linux_alsa.c
+	gcc -D USE_AUDIO -O2 -Wall -W c64-kitty.c audio_linux_alsa.c -o c64-kitty -g -ggdb -lasound -lpthread
+
 clean:
 	rm -f c64-kitty
