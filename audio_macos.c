@@ -112,3 +112,5 @@ void *audio_init(void) {
     }
     return (void*)state;
 }
+
+void audio_cleanup(void *user_data) { return };

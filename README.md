@@ -11,13 +11,19 @@ The code is licensed under the BSD license.
 
 ## Building
 
-On Linux and other Unix-alike system, where we don't have support for audio (yet) use:
+On other Unix-alike system, where we don't have support for audio (yet) use:
 
     make
 
 Otherwise, if you are in MacOS, use the following to use the low level C Audio API provided by the operating system:
 
     make macos-audio
+
+If you are in Linux, you can use `pulseaudio`, via the `pulseaudio-dev` library
+
+    make linux-audio
+
+pulseaudio interface is very common on Linux and also work for newer distributions with PipeWire.
 
 ## Loading PRG / BIN files
 
@@ -29,6 +35,4 @@ For instance, try this:
 
 The *unbelievable* [demo by Linus Åkesson](https://linusakesson.net/scene/a-mind-is-born/), released under the license Creative Commons BY-NC-SA, so I hope it is fine to include it here since this is open source code (Otherwise, please, Linus, tell me!).
 
-It is highly recommended to run the demo with audio on (on Mac).
-
-If you want to implement equally minimal, no dependencies, audio support for Linux, please send a pull request: thank you.
+It is highly recommended to run the demo with audio on (on Mac and Linux).
