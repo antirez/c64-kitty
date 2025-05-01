@@ -21,7 +21,7 @@ Otherwise, if you are in MacOS, use the following to use the low level C Audio A
 
 If you are in Linux, you can use `pulseaudio`, via the `pulseaudio-dev` library
 
-    make linux-audio
+    make linux-pulseaudio
 
 pulseaudio interface is very common on Linux and also work for newer distributions with PipeWire.
 
