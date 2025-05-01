@@ -11,9 +11,13 @@ The code is licensed under the BSD license.
 
 ## Building
 
-On Linux and other Unix-alike system, where we don't have support for audio (yet) use:
+On Linux and other Unix-alike system, where we don't have support for audio use:
 
     make
+
+On Linux and other Unix-alike with ALSA audio use:
+
+    make  linux-alsa
 
 Otherwise, if you are in MacOS, use the following to use the low level C Audio API provided by the operating system:
 
@@ -29,6 +33,6 @@ For instance, try this:
 
 The *unbelievable* [demo by Linus Åkesson](https://linusakesson.net/scene/a-mind-is-born/), released under the license Creative Commons BY-NC-SA, so I hope it is fine to include it here since this is open source code (Otherwise, please, Linus, tell me!).
 
-It is highly recommended to run the demo with audio on (on Mac).
+It is highly recommended to run the demo with audio on.
 
-If you want to implement equally minimal, no dependencies, audio support for Linux, please send a pull request: thank you.
+Linux ALSA audio support by Pasquale 'sid' Fiorillo.
