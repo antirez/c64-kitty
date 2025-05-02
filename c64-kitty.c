@@ -138,17 +138,40 @@ void kitty_update_display(int frame, int width, int height) {
 
 // Process keyboard input
 void process_keyboard() {
-    if (kbhit()) {
-        char ch = getchar();
-        if (ch == 'q' || ch == 'Q' || ch == 27) { // q, Q or ESC
-            quit_requested = 1;
-            return;
-        }
+    int bytes_waiting = kbhit();
+    char ch[8];
 
-        // Map key to C64 keycode and send it to the emulator
-        c64_key_down(&c64, ch);
-        c64_key_up(&c64, ch);
+    if (!bytes_waiting) return; // No keyboard events pending.
+    for (int j = 0; j < bytes_waiting && j < (int)sizeof(ch); j++)
+        ch[j] = getchar();
+
+    int c64_key = 0;
+
+    if (ch[0] == 27 && bytes_waiting == 1) { // Just ESC.
+        quit_requested = 1;
+        return;
+    } else if (bytes_waiting == 3 && ch[0] == 27 && ch[1] == '[') {
+        switch(ch[2]) {
+        case 'A': c64_key = C64_KEY_CSRUP; break;
+        case 'B': c64_key = C64_KEY_CSRDOWN; break;
+        case 'C': c64_key = C64_KEY_CSRRIGHT; break;
+        case 'D': c64_key = C64_KEY_CSRLEFT; break;
+        default:
+            printf("Not handled escape: ESC[%c\r\n", ch[2]);
+            break;
+        }
+    } else {
+        c64_key = ch[0];
+        if (islower(c64_key)) c64_key = toupper(c64_key);
+        else if (isupper(c64_key)) c64_key = tolower(c64_key);
+        else if (c64_key == 127) c64_key = C64_KEY_DEL;
     }
+
+    if (c64_key == 0) return;
+
+    // Map key to C64 keycode and send it to the emulator.
+    c64_key_down(&c64, c64_key);
+    c64_key_up(&c64, c64_key);
 }
 
 void crt_set_pixel(int x, int y, uint32_t color) {
@@ -267,7 +290,7 @@ int main(int argc, char* argv[]) {
     /* Initialize Kitty graphics */
     kitty_init(width, height);
 
-    printf("C64 Emulator started. Press 'q' or 'ESC' to quit.\n");
+    printf("C64 Emulator started. Press 'ESC' to quit.\n");
 
     // Enable raw mode for keyboard input
     enable_raw_mode();
