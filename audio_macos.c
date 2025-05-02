@@ -115,6 +115,6 @@ void *audio_init(void) {
 
 void audio_cleanup(void *user_data) {
     AudioState *state = (AudioState *)user_data;
-    AudioQueueStop(state.queue, true);
-    AudioQueueDispose(state.queue, true);
+    AudioQueueStop(state->queue, true);
+    AudioQueueDispose(state->queue, true);
 };
