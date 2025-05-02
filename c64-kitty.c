@@ -164,7 +164,7 @@ void process_keyboard() {
         c64_key = ch[0];
         if (islower(c64_key)) c64_key = toupper(c64_key);
         else if (isupper(c64_key)) c64_key = tolower(c64_key);
-        else if (c64_key == 127) c64_key = C64_KEY_DEL;
+        else if (c64_key == 127 || c64_key == 8) c64_key = C64_KEY_DEL;
     }
 
     if (c64_key == 0) return;
