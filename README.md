@@ -17,7 +17,7 @@ If you want to compile without audio support, use:
 
 If you are in MacOS, use the following to use the low level C Audio API provided by the operating system. No additional libraries needed.
 
-    make macos-audio
+    make macos
 
 On Linux and other systems with ALSA audio, use:
 
