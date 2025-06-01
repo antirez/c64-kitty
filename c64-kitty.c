@@ -32,20 +32,12 @@
 #include "c64.h"
 #include "c64-roms.h"
 
-static c64_t c64;
-static int quit_requested = 0;
-uint8_t *fb;
-int c64width, c64height;
-long kitty_id;
-
 // run the emulator and render-loop at 30fps
 #define FRAME_USEC (33333)
 
-// Base64 encoding table
-static const char base64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
 // Function to encode data to base64
 size_t base64_encode(const unsigned char *data, size_t input_length, char *encoded_data) {
+    const char base64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     size_t output_length = 4 * ((input_length + 2) / 3);
     size_t i, j;
 
@@ -99,18 +91,19 @@ int kbhit() {
 }
 
 // Initialize Kitty graphics protocol
-void kitty_init(int width, int height) {
+uint8_t *kitty_init(int width, int height, long *kitty_id) {
     // Initialize random seed for image ID
     srand(time(NULL));
-    kitty_id = rand();
+    *kitty_id = rand();
 
     // Allocate framebuffer memory
-    fb = malloc(width * height * 3);
+    uint8_t *fb = malloc(width * height * 3);
     memset(fb, 0, width * height * 3);
+    return fb;
 }
 
 // Update display using Kitty graphics protocol
-void kitty_update_display(int frame, int width, int height) {
+void kitty_update_display(long kitty_id, int frame_number, int width, int height, uint8_t *fb) {
     // Calculate base64 encoded size
     size_t bitmap_size = width * height * 3;
     size_t encoded_size = 4 * ((bitmap_size + 2) / 3);
@@ -126,30 +119,32 @@ void kitty_update_display(int frame, int width, int height) {
     encoded_data[encoded_size] = '\0';  // Null-terminate the string
 
     // Send Kitty Graphics Protocol escape sequence with base64 data
-    printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10;", frame == 0 ? 'T' : 't',  kitty_id, width, height);
+    printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10;",
+        frame_number == 0 ? 'T' : 't',  kitty_id, width, height);
     printf("%s", encoded_data);
     printf("\033\\");
-    if (frame == 0) printf("\r\n");
+    if (frame_number == 0) printf("\r\n");
     fflush(stdout);
 
     // Clean up
     free(encoded_data);
 }
 
-// Process keyboard input
-void process_keyboard() {
+// Process keyboard input, sets the pressed or released key into the
+// state of the emulator. Returns 0 for any key, and 1 if the user
+// requested to stop the emulator.
+int process_keyboard(c64_t *c64) {
     int bytes_waiting = kbhit();
     char ch[8];
 
-    if (!bytes_waiting) return; // No keyboard events pending.
+    if (!bytes_waiting) return 0; // No keyboard events pending.
     for (int j = 0; j < bytes_waiting && j < (int)sizeof(ch); j++)
         ch[j] = getchar();
 
     int c64_key = 0;
 
     if (ch[0] == 27 && bytes_waiting == 1) { // Just ESC.
-        quit_requested = 1;
-        return;
+        return 1;
     } else if (bytes_waiting == 3 && ch[0] == 27 && ch[1] == '[') {
         switch(ch[2]) {
         case 'A': c64_key = C64_KEY_CSRUP; break;
@@ -167,17 +162,21 @@ void process_keyboard() {
         else if (c64_key == 127 || c64_key == 8) c64_key = C64_KEY_DEL;
     }
 
-    if (c64_key == 0) return;
+    if (c64_key == 0) return 0;
 
     // Map key to C64 keycode and send it to the emulator.
-    c64_key_down(&c64, c64_key);
-    c64_key_up(&c64, c64_key);
+    c64_key_down(c64, c64_key);
+    c64_key_up(c64, c64_key);
+    return 0;
 }
 
-void crt_set_pixel(int x, int y, uint32_t color) {
-    if (x < 0 || x >= c64width || y < 0 || y >= c64height) return;
+void crt_set_pixel(void *fbptr, int x, int y, uint32_t color) {
+    uint8_t *fb = fbptr;
 
-    uint8_t *dst = fb + (x*3+y*c64width*3);
+    if (x < 0 || x >= _C64_SCREEN_WIDTH || y < 0 || y >= _C64_SCREEN_HEIGHT)
+        return;
+
+    uint8_t *dst = fb + (x*3+y*_C64_SCREEN_WIDTH*3);
     dst[0] = color & 0xff;         // R
     dst[1] = (color>>8) & 0xff;    // G
     dst[2] = (color>>16) & 0xff;   // B
@@ -252,6 +251,7 @@ void audio_cleanup(void *user_data);
 #endif
 
 int main(int argc, char* argv[]) {
+    c64_t c64;
     c64_desc_t c64_desc = {0};
 
     /* Initialize the audio subsystem. */
@@ -267,6 +267,12 @@ int main(int argc, char* argv[]) {
     c64_desc.audio.callback = audio_cb;
 #endif
 
+    /* Initialize Kitty graphics */
+    int width  = _C64_SCREEN_WIDTH;
+    int height = _C64_SCREEN_HEIGHT;
+    long kitty_id;
+    uint8_t *fb = kitty_init(width, height, &kitty_id);
+
     /* C64 emulator init. */
     c64_desc.roms.chars.ptr = dump_c64_char_bin;
     c64_desc.roms.chars.size = sizeof(dump_c64_char_bin);
@@ -275,20 +281,13 @@ int main(int argc, char* argv[]) {
     c64_desc.roms.kernal.ptr = dump_c64_kernalv3_bin;
     c64_desc.roms.kernal.size = sizeof(dump_c64_kernalv3_bin);
     c64_desc.crt_set_pixel = crt_set_pixel;
+    c64_desc.crt_set_pixel_fb = fb;
     c64_init(&c64, &c64_desc);
 
     /* Get C64 display information */
     chips_display_info_t di = c64_display_info(&c64);
     printf("FB total size %dx%d\n", di.frame.dim.width, di.frame.dim.height);
     printf("FB screen %dx%d at %dx%d\n", di.screen.width, di.screen.height, di.screen.x, di.screen.y);
-
-    int width = di.screen.width;
-    int height = di.screen.height;
-    c64width = width;
-    c64height = height;
-
-    /* Initialize Kitty graphics */
-    kitty_init(width, height);
 
     printf("C64 Emulator started. Press 'ESC' to quit.\n");
 
@@ -299,16 +298,18 @@ int main(int argc, char* argv[]) {
     int frame = 0;
     uint64_t total_us_emulated = 0;
     uint64_t total_us_start = time_us();
+    int quit_requested = 0;
+
     while (!quit_requested) {
         // tick the emulator for 1 frame
         c64_exec(&c64, FRAME_USEC);
         total_us_emulated += FRAME_USEC;
 
         // Handle keyboard input
-        process_keyboard();
+        quit_requested = process_keyboard(&c64);
 
         // Update display using Kitty protocol
-        kitty_update_display(frame++, width, height);
+        kitty_update_display(kitty_id, frame++, width, height, fb);
 
         /* Synchronize the emulated C64 at its theoretical speed. */
         uint64_t total_us_real = time_us() - total_us_start;

@@ -337,7 +337,8 @@ typedef struct {
             chips_range_t e000_ffff;
         } c1541;
     } roms;
-    void (*crt_set_pixel)(int x, int y, uint32_t c);
+    void (*crt_set_pixel)(void *fbptr, int x, int y, uint32_t c);
+    void *crt_set_pixel_fb;
 } c64_desc_t;
 
 // C64 emulator state
@@ -498,6 +499,7 @@ void c64_init(c64_t* sys, const c64_desc_t* desc) {
         },
         .user_data = sys,
         .crt_set_pixel = desc->crt_set_pixel,
+        .crt_set_pixel_fb = desc->crt_set_pixel_fb,
     });
     m6581_init(&sys->sid, &(m6581_desc_t){
         .tick_hz = C64_FREQUENCY,

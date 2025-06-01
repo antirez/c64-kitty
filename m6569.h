@@ -182,7 +182,8 @@ typedef struct {
     m6569_fetch_t fetch_cb;
     // optional user-data for fetch callback
     void* user_data;
-    void (*crt_set_pixel)(int x, int y, uint32_t c);
+    void (*crt_set_pixel)(void *fbptr, int x, int y, uint32_t c);
+    void *crt_set_pixel_fb;
 } m6569_desc_t;
 
 // register bank
@@ -328,7 +329,8 @@ typedef struct {
     m6569_sprite_unit_t sunit;
     m6569_video_matrix_t vm;
     uint64_t pins;
-    void (*crt_set_pixel)(int x, int y, uint32_t c);
+    void (*crt_set_pixel)(void *fbptr, int x, int y, uint32_t c);
+    void *crt_set_pixel_fb;
 } m6569_t;
 
 // initialize a new m6569_t instance
@@ -415,6 +417,7 @@ void m6569_init(m6569_t* vic, const m6569_desc_t* desc) {
     vic->mem.fetch_cb = desc->fetch_cb;
     vic->mem.user_data = desc->user_data;
     vic->crt_set_pixel = desc->crt_set_pixel;
+    vic->crt_set_pixel_fb = desc->crt_set_pixel_fb;
 }
 
 /*--- reset ------------------------------------------------------------------*/
@@ -1147,7 +1150,7 @@ static inline void _m6569_decode_pixels(m6569_t* vic, int x, int y, uint8_t g_da
             case 4: bmc = _m6569_gunit_decode_mode4(vic); break;
         }
         _m6569_test_mob_data_col(vic, bmc, sc);
-        vic->crt_set_pixel(x+i, y, _m6569_colors[brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp)]);
+        vic->crt_set_pixel(vic->crt_set_pixel_fb, x+i, y, _m6569_colors[brd ? brd_color : _m6569_color_multiplex(bmc, sc, mdp)]);
     }
 }
 
