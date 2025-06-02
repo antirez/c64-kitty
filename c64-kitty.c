@@ -38,28 +38,22 @@
 // Function to encode data to base64
 size_t base64_encode(const unsigned char *data, size_t input_length, char *encoded_data) {
     const char base64_table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    size_t output_length = 4 * ((input_length + 2) / 3);
     size_t i, j;
 
-    for (i = 0, j = 0; i < input_length;) {
-        uint32_t octet_a = i < input_length ? data[i++] : 0;
-        uint32_t octet_b = i < input_length ? data[i++] : 0;
-        uint32_t octet_c = i < input_length ? data[i++] : 0;
-
+    for (i = 0, j = 0; i < input_length; i += 3) {
+        uint32_t octet_a = data[i];
+        uint32_t octet_b = (i+1 < input_length) ? data[i+1] : 0;
+        uint32_t octet_c = (i+2 < input_length) ? data[i+2] : 0;
         uint32_t triple = (octet_a << 16) + (octet_b << 8) + octet_c;
 
         encoded_data[j++] = base64_table[(triple >> 18) & 0x3F];
         encoded_data[j++] = base64_table[(triple >> 12) & 0x3F];
-        encoded_data[j++] = base64_table[(triple >> 6) & 0x3F];
-        encoded_data[j++] = base64_table[triple & 0x3F];
+        encoded_data[j++] = (i+1 < input_length) ?
+                                base64_table[(triple >> 6) & 0x3F] : '=';
+        encoded_data[j++] = (i+2 < input_length) ?
+                                base64_table[triple & 0x3F] : '=';
     }
-
-    // Add padding if needed
-    size_t mod_table[] = {0, 2, 1};
-    for (i = 0; i < mod_table[input_length % 3]; i++)
-        encoded_data[output_length - 1 - i] = '=';
-
-    return output_length;
+    return j;
 }
 
 // Terminal keyboard input handling
@@ -118,13 +112,37 @@ void kitty_update_display(long kitty_id, int frame_number, int width, int height
     base64_encode(fb, bitmap_size, encoded_data);
     encoded_data[encoded_size] = '\0';  // Null-terminate the string
 
-    // Send Kitty Graphics Protocol escape sequence with base64 data
-    printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10;",
-        frame_number == 0 ? 'T' : 't',  kitty_id, width, height);
-    printf("%s", encoded_data);
-    printf("\033\\");
-    if (frame_number == 0) printf("\r\n");
-    fflush(stdout);
+    // Send Kitty Graphics Protocol escape sequence with base64 data.
+    // Kitty allows a maximum chunk of 4096 bytes each.
+    size_t encoded_offset = 0;
+    size_t chunk_size = 4096;
+    while(encoded_offset < encoded_size) {
+        int more_chunks = (encoded_offset + chunk_size) < encoded_size;
+        if (encoded_offset == 0) {
+            printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10,m=%d;",
+                frame_number == 0 ? 'T' : 't',  kitty_id, width, height,
+                more_chunks);
+        } else {
+            // Chunks after the first just require the raw data and the
+            // more flag.
+            printf("\033_Gm=%d;", more_chunks);
+        }
+
+        // Transfer payload.
+        size_t this_size = more_chunks ? 4096 : encoded_size-encoded_offset;
+        fwrite(encoded_data+encoded_offset, this_size, 1, stdout);
+        printf("\033\\");
+        fflush(stdout);
+        encoded_offset += this_size;
+    }
+
+    /* When the image is created, add a newline so that the cursor
+     * is more naturally placed under the image, not at the right/bottom
+     * corner. */
+    if (frame_number == 0) {
+        printf("\r\n");
+        fflush(stdout);
+    }
 
     // Clean up
     free(encoded_data);
