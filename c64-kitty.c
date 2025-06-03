@@ -119,13 +119,21 @@ void kitty_update_display(long kitty_id, int frame_number, int width, int height
     while(encoded_offset < encoded_size) {
         int more_chunks = (encoded_offset + chunk_size) < encoded_size;
         if (encoded_offset == 0) {
-            printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10,m=%d;",
-                frame_number == 0 ? 'T' : 't',  kitty_id, width, height,
-                more_chunks);
+            if (frame_number == 0) {
+                printf("\033_Ga=T,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10,m=%d;",
+                    kitty_id, width, height, more_chunks);
+            } else {
+                printf("\033_Ga=f,r=1,i=%lu,f=24,x=0,y=0,s=%d,v=%d,m=%d;",
+                    kitty_id, width, height, more_chunks);
+            }
         } else {
             // Chunks after the first just require the raw data and the
             // more flag.
-            printf("\033_Gm=%d;", more_chunks);
+            if (frame_number == 0) {
+                printf("\033_Gm=%d;", more_chunks);
+            } else {
+                printf("\033_Ga=f,r=1,m=%d;", more_chunks);
+            }
         }
 
         // Transfer payload.
@@ -134,6 +142,11 @@ void kitty_update_display(long kitty_id, int frame_number, int width, int height
         printf("\033\\");
         fflush(stdout);
         encoded_offset += this_size;
+    }
+
+    if (frame_number > 0) {
+        printf("\033_Ga=a,c=1,i=%lu;", kitty_id);
+        printf("\033\\");
     }
 
     /* When the image is created, add a newline so that the cursor
