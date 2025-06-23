@@ -16,6 +16,16 @@
 #include <sys/time.h>
 #include <assert.h>
 
+/* Global configuration (mostly from command line options). */
+struct {
+    int ghostty_mode;   // Use non standard Kitty protocol that works with
+                        // Ghostty, and allows animation, but is incompatible
+                        // with Kitty (default).
+    int kitty_mode;     // Use graphics protocol with animation codes, this
+                        // is needed for the Kitty terminal.
+    char *prg_filename; // PRG to execute, if one was given at startup.
+} EmuConfig;
+
 #define CHIPS_IMPL
 #include "chips_common.h"
 #include "m6502.h"
@@ -119,20 +129,31 @@ void kitty_update_display(long kitty_id, int frame_number, int width, int height
     while(encoded_offset < encoded_size) {
         int more_chunks = (encoded_offset + chunk_size) < encoded_size;
         if (encoded_offset == 0) {
-            if (frame_number == 0) {
-                printf("\033_Ga=T,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10,m=%d;",
-                    kitty_id, width, height, more_chunks);
+            if (EmuConfig.ghostty_mode) {
+                printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10,m=%d;",
+                    frame_number == 0 ? 'T' : 't',  kitty_id, width, height,
+                    more_chunks);
             } else {
-                printf("\033_Ga=f,r=1,i=%lu,f=24,x=0,y=0,s=%d,v=%d,m=%d;",
-                    kitty_id, width, height, more_chunks);
+                if (frame_number == 0) {
+                    printf("\033_Ga=T,i=%lu,f=24,s=%d,v=%d,q=2,"
+                           "c=30,r=10,m=%d;",
+                        kitty_id, width, height, more_chunks);
+                } else {
+                    printf("\033_Ga=f,r=1,i=%lu,f=24,x=0,y=0,s=%d,v=%d,m=%d;",
+                        kitty_id, width, height, more_chunks);
+                }
             }
         } else {
-            // Chunks after the first just require the raw data and the
-            // more flag.
-            if (frame_number == 0) {
+            if (EmuConfig.ghostty_mode) {
                 printf("\033_Gm=%d;", more_chunks);
             } else {
-                printf("\033_Ga=f,r=1,m=%d;", more_chunks);
+                // Chunks after the first just require the raw data and the
+                // more flag.
+                if (frame_number == 0) {
+                    printf("\033_Gm=%d;", more_chunks);
+                } else {
+                    printf("\033_Ga=f,r=1,m=%d;", more_chunks);
+                }
             }
         }
 
@@ -144,7 +165,9 @@ void kitty_update_display(long kitty_id, int frame_number, int width, int height
         encoded_offset += this_size;
     }
 
-    if (frame_number > 0) {
+    if (EmuConfig.kitty_mode && frame_number > 0) {
+        // In Kitty mode we need to emit the "a" action to update
+        // our area with the new frame.
         printf("\033_Ga=a,c=1,i=%lu;", kitty_id);
         printf("\033\\");
     }
@@ -281,9 +304,36 @@ void audio_from_emulator(const float *samples, int num_samples, void *user_data)
 void audio_cleanup(void *user_data);
 #endif
 
-int main(int argc, char* argv[]) {
+/* Initialize and parse the configuration, storing it into the
+ * global EmuConfig structure. */
+void parse_config(int argc, char **argv) {
+    EmuConfig.ghostty_mode = 1;
+    EmuConfig.kitty_mode = 0;
+    EmuConfig.prg_filename = NULL;
+
+    for (int j = 1; j < argc; j++) {
+        if (!strcasecmp(argv[j],"--kitty")) {
+            EmuConfig.kitty_mode = 1;
+            EmuConfig.ghostty_mode = 0;
+        } else if (!strcasecmp(argv[j],"--ghostty")) {
+            EmuConfig.kitty_mode = 0;
+            EmuConfig.ghostty_mode = 1;
+        } else {
+            if (argv[j][0] != '-' && EmuConfig.prg_filename == NULL) {
+                EmuConfig.prg_filename = strdup(argv[j]);
+            } else {
+                fprintf(stderr, "Unrecognized option: %s\n", argv[j]);
+                exit(1);
+            }
+        }
+    }
+}
+
+int main(int argc, char **argv) {
     c64_t c64;
     c64_desc_t c64_desc = {0};
+
+    parse_config(argc, argv);
 
     /* Initialize the audio subsystem. */
 #ifdef USE_AUDIO
@@ -342,15 +392,15 @@ int main(int argc, char* argv[]) {
         // Update display using Kitty protocol
         kitty_update_display(kitty_id, frame++, width, height, fb);
 
-        /* Synchronize the emulated C64 at its theoretical speed. */
+        // Synchronize the emulated C64 at its theoretical speed.
         uint64_t total_us_real = time_us() - total_us_start;
         int64_t delta_us = total_us_emulated - total_us_real;
         int64_t to_sleep_us = FRAME_USEC + delta_us;
         if (to_sleep_us > 0) usleep(to_sleep_us);
 
-        /* Load the C64 provided PRG file if any. */
-        if (frame == 90 && argc >= 2) {
-            load_prg_file(&c64,argv[1]);
+        // Load the C64 provided PRG file if any.
+        if (frame == 90 && EmuConfig.prg_filename) {
+            load_prg_file(&c64,EmuConfig.prg_filename);
         }
     }
 
