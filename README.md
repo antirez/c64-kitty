@@ -49,6 +49,17 @@ The *unbelievable* [demo by Linus Åkesson](https://linusakesson.net/scene/a-min
 It is highly recommended to run the demo with audio on (on Mac and Linux).
 Unfortunately another incredible demo by Linus, Nine, is still not compatible with this emulator.
 
+## Other useful options
+
+**--zoom**
+
+Changes the number of characters used to render the C64 screen.
+For example, to double the x/y size (four times the surface) use:
+
+        --zoom 2
+
+You can use any number from 0.25 to 10.
+
 ## Credits
 
 * C64 chips implementations by Andre Weissflog.

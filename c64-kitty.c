@@ -24,7 +24,15 @@ struct {
     int kitty_mode;     // Use graphics protocol with animation codes, this
                         // is needed for the Kitty terminal.
     char *prg_filename; // PRG to execute, if one was given at startup.
+    float zoom;         // C64 display zoom level.
+    int width_chars;    // C64 display width in characters.
+    int height_chars;   // C64 display height in characters.
 } EmuConfig;
+
+#define C64_MIN_ZOOM 0.25               // Minimum zoom level.
+#define C64_MAX_ZOOM 10                 // Maximum zoom level.
+#define C64_DEFAULT_WIDTH_CHARS 30      // Width in characters.
+#define C64_DEFAULT_HEIGHT_CHARS 10     // Height in characters.
 
 #define CHIPS_IMPL
 #include "chips_common.h"
@@ -130,14 +138,17 @@ void kitty_update_display(long kitty_id, int frame_number, int width, int height
         int more_chunks = (encoded_offset + chunk_size) < encoded_size;
         if (encoded_offset == 0) {
             if (EmuConfig.ghostty_mode) {
-                printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=30,r=10,m=%d;",
+                printf("\033_Ga=%c,i=%lu,f=24,s=%d,v=%d,q=2,c=%d,r=%d,m=%d;",
                     frame_number == 0 ? 'T' : 't',  kitty_id, width, height,
+                    EmuConfig.width_chars, EmuConfig.height_chars,
                     more_chunks);
             } else {
                 if (frame_number == 0) {
                     printf("\033_Ga=T,i=%lu,f=24,s=%d,v=%d,q=2,"
-                           "c=30,r=10,m=%d;",
-                        kitty_id, width, height, more_chunks);
+                           "c=%d,r=%d,m=%d;",
+                        kitty_id, width, height,
+                        EmuConfig.width_chars, EmuConfig.height_chars,
+                        more_chunks);
                 } else {
                     printf("\033_Ga=f,r=1,i=%lu,f=24,x=0,y=0,s=%d,v=%d,m=%d;",
                         kitty_id, width, height, more_chunks);
@@ -310,14 +321,24 @@ void parse_config(int argc, char **argv) {
     EmuConfig.ghostty_mode = 1;
     EmuConfig.kitty_mode = 0;
     EmuConfig.prg_filename = NULL;
+    EmuConfig.zoom = 1;
 
     for (int j = 1; j < argc; j++) {
+        int leftargs = argc-j-1;
         if (!strcasecmp(argv[j],"--kitty")) {
             EmuConfig.kitty_mode = 1;
             EmuConfig.ghostty_mode = 0;
         } else if (!strcasecmp(argv[j],"--ghostty")) {
             EmuConfig.kitty_mode = 0;
             EmuConfig.ghostty_mode = 1;
+        } else if (!strcasecmp(argv[j],"--zoom") && leftargs) {
+            j++;
+            EmuConfig.zoom = strtod(argv[j],NULL);
+            if (EmuConfig.zoom < C64_MIN_ZOOM) {
+                EmuConfig.zoom = C64_MIN_ZOOM;
+            } else if (EmuConfig.zoom > C64_MAX_ZOOM) {
+                EmuConfig.zoom = C64_MAX_ZOOM;
+            }
         } else {
             if (argv[j][0] != '-' && EmuConfig.prg_filename == NULL) {
                 EmuConfig.prg_filename = strdup(argv[j]);
@@ -327,6 +348,10 @@ void parse_config(int argc, char **argv) {
             }
         }
     }
+
+    // Handle configurations that require to be computed.
+    EmuConfig.width_chars = C64_DEFAULT_WIDTH_CHARS * EmuConfig.zoom;
+    EmuConfig.height_chars = C64_DEFAULT_HEIGHT_CHARS * EmuConfig.zoom;
 }
 
 int main(int argc, char **argv) {
